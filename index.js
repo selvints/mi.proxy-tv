@@ -1,31 +1,42 @@
-const express = require("express");
-const axios = require("axios");
-const cors = require("cors");
+const express = require('express');
+const axios = require('axios');
 const app = express();
+const port = process.env.PORT || 3000;
 
-app.use(cors()); // Esto permite que bsite.net pueda pedir datos aquí
-
-app.get("/proxy", async (req, res) => {
-    const targetUrl = req.query.url;
-    if (!targetUrl) return res.status(400).send("Falta la URL");
+app.get('/stream/:canalId', async (req, res) => {
+    const { canalId } = req.params;
+    // Base de tu IPTV con tus credenciales
+    const IPTV_BASE = 'http://vipketseyket.top:8080/live/VIP013911761680146102/77b83cecc0c6';
+    const targetUrl = `${IPTV_BASE}/${canalId}`;
 
     try {
+        console.log(`Solicitando canal: ${canalId}`);
+
         const response = await axios({
             method: 'get',
             url: targetUrl,
             responseType: 'stream',
             headers: {
-                // Esto engaña al servidor del canal para que crea que eres un usuario real
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
-            }
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            timeout: 15000 
         });
 
-        res.setHeader("Content-Type", response.headers["content-type"] || "application/vnd.apple.mpegurl");
+        // Cabeceras CORS esenciales
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Content-Type', 'video/mp2t'); // Formato para MPEG-TS
+
         response.data.pipe(res);
-    } catch (err) {
-        res.status(500).send("Error: " + err.message);
+
+        req.on('close', () => {
+            response.data.destroy();
+        });
+
+    } catch (error) {
+        console.error('Error:', error.message);
+        res.status(500).setHeader('Access-Control-Allow-Origin', '*').send('Error en el stream');
     }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(Servidor listo en puerto ${PORT}));
+app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
