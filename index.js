@@ -5,33 +5,32 @@ const port = process.env.PORT || 3000;
 
 app.get('/stream/:canalId', async (req, res) => {
     const { canalId } = req.params;
-    // Base de tu IPTV con tus credenciales
-    const IPTV_BASE = 'http://vipketseyket.top:8080/live/VIP013911761680146102/77b83cecc0c6';
+    // Dominio base del proveedor
+    const HOST_BASE = 'http://vipketseyket.top:8080';
+    const IPTV_BASE = `${HOST_BASE}/live/VIP013911761680146102/77b83cecc0c6`;
     const targetUrl = `${IPTV_BASE}/${canalId}`;
 
     try {
-        console.log(`Solicitando canal: ${canalId}`);
-
         const response = await axios({
             method: 'get',
             url: targetUrl,
-            responseType: 'stream',
+            // Quitamos stream para poder manipular el texto si es m3u8
+            responseType: 'text', 
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             },
             timeout: 15000 
         });
 
-        // Cabeceras CORS esenciales
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.setHeader('Content-Type', 'video/mp2t'); // Formato para MPEG-TS
+        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
 
-        response.data.pipe(res);
+        // LA MAGIA: Reemplazamos las rutas relativas por absolutas
+        // Buscamos cualquier línea que empiece con /hlsr y le ponemos el dominio antes
+        let m3u8Content = response.data;
+        const correctedContent = m3u8Content.replace(/\n\/hlsr/g, `\n${HOST_BASE}/hlsr`);
 
-        req.on('close', () => {
-            response.data.destroy();
-        });
+        res.send(correctedContent);
 
     } catch (error) {
         console.error('Error:', error.message);
@@ -39,4 +38,4 @@ app.get('/stream/:canalId', async (req, res) => {
     }
 });
 
-app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
+app.listen(port, () => console.log(`Proxy corregido corriendo en puerto ${port}`));
