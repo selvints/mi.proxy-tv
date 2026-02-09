@@ -1,64 +1,42 @@
 const express = require('express');
 const axios = require('axios');
 const app = express();
+const port = process.env.PORT || 3000;
 
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    next();
-});
-
-// 1. MANIFIESTO (.m3u8)
 app.get('/stream/:canalId', async (req, res) => {
     const { canalId } = req.params;
-    const host = 'http://vipketseyket.top:8080';
-    const user = 'VIP013911761680146102';
-    const pass = '77b83cecc0c6';
-    
-    try {
-        const response = await axios.get(`${host}/live/${user}/${pass}/${canalId}.m3u8`, {
-            responseType: 'text',
-            headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-
-        // Forzamos que el proxy use HTTPS para evitar el error de Mixed Content
-        const protocol = req.headers['x-forwarded-proto'] || 'https';
-        const proxyUrl = `${protocol}://${req.get('host')}/ts?url=`;
-        
-        // Reemplazo exacto: buscamos líneas que NO empiecen con # y contengan /hlsr/
-        const lines = response.data.split('\n');
-        const fixedLines = lines.map(line => {
-            if (line.startsWith('/hlsr/')) {
-                return `${proxyUrl}${encodeURIComponent(host + line)}`;
-            }
-            return line;
-        });
-
-        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-        res.send(fixedLines.join('\n'));
-    } catch (e) {
-        console.error(e.message);
-        res.status(500).send("Error de conexión con el IPTV");
-    }
-});
-
-// 2. TÚNEL DE SEGMENTOS (.ts)
-app.get('/ts', async (req, res) => {
-    const videoUrl = req.query.url;
-    if (!videoUrl) return res.status(400).send('No URL');
+    // Base de tu IPTV con tus credenciales
+    const IPTV_BASE = 'http://vipketseyket.top:8080/live/VIP013911761680146102/77b83cecc0c6';
+    const targetUrl = `${IPTV_BASE}/${canalId}`;
 
     try {
+        console.log(`Solicitando canal: ${canalId}`);
+
         const response = await axios({
             method: 'get',
-            url: decodeURIComponent(videoUrl),
+            url: targetUrl,
             responseType: 'stream',
-            headers: { 'User-Agent': 'Mozilla/5.0' }
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            timeout: 15000 
         });
-        res.setHeader('Content-Type', 'video/mp2t');
+
+        // Cabeceras CORS esenciales
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Content-Type', 'video/mp2t'); // Formato para MPEG-TS
+
         response.data.pipe(res);
-    } catch (e) {
-        res.status(500).send(e.message);
+
+        req.on('close', () => {
+            response.data.destroy();
+        });
+
+    } catch (error) {
+        console.error('Error:', error.message);
+        res.status(500).setHeader('Access-Control-Allow-Origin', '*').send('Error en el stream');
     }
 });
 
-app.listen(process.env.PORT || 3000);
+app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
