@@ -6,7 +6,7 @@ const port = process.env.PORT || 3000;
 app.get('/stream/:canalId', async (req, res) => {
     const { canalId } = req.params;
     const IPTV_BASE = 'http://vipketseyket.top:8080/live/VIP013911761680146102/77b83cecc0c6';
-    const targetUrl = ${IPTV_BASE}/${canalId};
+    const targetUrl = `${IPTV_BASE}/${canalId}`;
 
     try {
         const response = await axios({
@@ -54,3 +54,4 @@ app.get('/stream/:canalId', async (req, res) => {
 });
 
 app.listen(port, () => console.log(Proxy IPTV en puerto ${port}));
+
