@@ -18,7 +18,7 @@ app.get('/live/*', async (req, res) => {
     const targetUrl = IPTV_BASE + path;
 
     try {
-        console.log(Proxying: ${targetUrl});
+        console.log(Proxying: `${targetUrl}`);
 
         const response = await axios({
             method: 'get',
@@ -54,3 +54,4 @@ app.get('/live/*', async (req, res) => {
 });
 
 app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
+
