@@ -40,7 +40,7 @@ app.get('/stream/:user/:pass/:canal*', async (req, res) => {
         if (isM3U8) {
             // REESCRITURA: Convertimos las rutas relativas /hlsr/ en rutas que pasen por tu proxy
             // Esto evita el error de Mixed Content y permite que el video cargue uno tras otro
-            const proxyBase = ${req.protocol}://${req.get('host')}/stream/${user}/${pass}/hlsr/;
+            const proxyBase = `${req.protocol}://${req.get('host')}/stream/${user}/${pass}/hlsr/`;
             const correctedContent = response.data.replace(/\/hlsr\//g, proxyBase);
             
             res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
@@ -58,4 +58,5 @@ app.get('/stream/:user/:pass/:canal*', async (req, res) => {
 });
 
 app.listen(port, () => console.log('Proxy dinámico corriendo'));
+
 
