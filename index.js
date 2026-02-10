@@ -3,60 +3,58 @@ const axios = require('axios');
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.get('/stream/:canalId', async (req, res) => {
-    const { canalId } = req.params;
-    // Base de tu IPTV con tus credenciales
-    const IPTV_BASE = 'http://vipketseyket.top:8080/live/VIP013911761680146102/77b83cecc0c6';
-    const targetUrl = `${IPTV_BASE}/${canalId}`;
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+    next();
+});
+
+// Ruta para procesar el M3U8 y los fragmentos TS
+app.get('/stream/:user/:pass/:canal*', async (req, res) => {
+    const { user, pass } = req.params;
+    // Captura el canal y cualquier sub-ruta (como /hlsr/...)
+    const fullPath = req.params.canal + req.params[0];
+    
+    const IPTV_HOST = 'http://192.142.5.76:8080';
+    
+    // Construimos la URL de destino
+    let targetUrl;
+    if (fullPath.startsWith('hlsr/')) {
+        targetUrl = ´${IPTV_HOST}/${fullPath}´;
+    } else {
+        targetUrl = ´${IPTV_HOST}/live/${user}/${pass}/${fullPath}´;
+    }
 
     try {
+        const isM3U8 = fullPath.endsWith('.m3u8');
+
         const response = await axios({
             method: 'get',
             url: targetUrl,
-            responseType: 'stream',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': '/',
-                'Connection': 'keep-alive'
-            },
-            // IMPORTANTE: Sin timeout para streams en vivo
-            timeout: 0 
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            responseType: isM3U8 ? 'text' : 'stream',
+            timeout: 10000
         });
 
-        // CABECERAS PARA STREAMING VIVO
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Content-Type', 'video/mp2t');
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-        res.setHeader('Connection', 'keep-alive');
-        // Esto le dice al navegador que no sabe qué tan grande es el archivo (porque es infinito)
-        res.setHeader('Transfer-Encoding', 'chunked'); 
+        if (isM3U8) {
+            // REESCRITURA: Convertimos las rutas relativas /hlsr/ en rutas que pasen por tu proxy
+            // Esto evita el error de Mixed Content y permite que el video cargue uno tras otro
+            const proxyBase = ${req.protocol}://${req.get('host')}/stream/${user}/${pass}/hlsr/;
+            const correctedContent = response.data.replace(/\/hlsr\//g, proxyBase);
+            
+            res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+            return res.send(correctedContent);
+        }
 
-        // Pipe con manejo de errores
+        // Si es un .ts (binario), lo enviamos como flujo
+        res.setHeader('Content-Type', 'video/mp2t');
         response.data.pipe(res);
 
-        response.data.on('error', (err) => {
-            console.error('Error en el stream de origen:', err.message);
-            res.end();
-        });
-
-        req.on('close', () => {
-            console.log('Cliente desconectado, cerrando stream.');
-            response.data.destroy();
-        });
-
     } catch (error) {
-        console.error('Error de conexión:', error.message);
-        if (!res.headersSent) {
-            res.status(500).setHeader('Access-Control-Allow-Origin', '*').send('Error en el stream');
-        }
+        console.error('Error:', error.message);
+        if (!res.headersSent) res.status(500).send('Error de conexión');
     }
 });
 
-app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
-
-
-
-
-
+app.listen(port, () => console.log('Proxy dinámico corriendo'));
