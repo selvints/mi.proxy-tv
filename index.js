@@ -3,56 +3,60 @@ const axios = require('axios');
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.header('Access-Control-Allow-Headers', '*');
-    next();
-});
-
-// Usamos '*' para capturar TODA la ruta después de /live/
-app.get('/live/*', async (req, res) => {
-    // Esto captura todo lo que venga después de /live/, ej: "VIP01/77b/5201.ts"
-    const path = req.params[0]; 
-    const IPTV_BASE = 'http://vipketseyket.top:8080/live/VIP013911761680146102/77b83cecc0c6/';
-    const targetUrl = IPTV_BASE + path;
+app.get('/stream/:canalId', async (req, res) => {
+    const { canalId } = req.params;
+    // Base de tu IPTV con tus credenciales
+    const IPTV_BASE = 'http://vipketseyket.top:8080/live/VIP013911761680146102/77b83cecc0c6';
+    const targetUrl = `${IPTV_BASE}/${canalId}`;
 
     try {
-        onsole.log('Proxying: ' + targetUrl);
-
         const response = await axios({
             method: 'get',
             url: targetUrl,
             responseType: 'stream',
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': '/',
                 'Connection': 'keep-alive'
             },
-            timeout: 0
+            // IMPORTANTE: Sin timeout para streams en vivo
+            timeout: 0 
         });
 
-        // Detectar tipo de contenido
-        if (path.endsWith('.m3u8')) {
-            res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-        } else {
-            res.setHeader('Content-Type', 'video/mp2t');
-        }
+        // CABECERAS PARA STREAMING VIVO
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Content-Type', 'video/mp2t');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Connection', 'keep-alive');
+        // Esto le dice al navegador que no sabe qué tan grande es el archivo (porque es infinito)
+        res.setHeader('Transfer-Encoding', 'chunked'); 
 
-        res.setHeader('Cache-Control', 'no-cache');
+        // Pipe con manejo de errores
         response.data.pipe(res);
 
+        response.data.on('error', (err) => {
+            console.error('Error en el stream de origen:', err.message);
+            res.end();
+        });
+
         req.on('close', () => {
-            if (response.data) response.data.destroy();
+            console.log('Cliente desconectado, cerrando stream.');
+            response.data.destroy();
         });
 
     } catch (error) {
-        console.error('Error en Proxy:', error.message);
+        console.error('Error de conexión:', error.message);
         if (!res.headersSent) {
-            res.status(500).send('Error cargando el segmento');
+            res.status(500).setHeader('Access-Control-Allow-Origin', '*').send('Error en el stream');
         }
     }
 });
 
 app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
+
+
+
 
 
