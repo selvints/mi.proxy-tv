@@ -12,63 +12,64 @@ app.use((req, res, next) => {
 app.get(['/live/:user/:pass/:canal*', '/stream/:user/:pass/:canal*'], async (req, res) => {
     try {
         const { user, pass } = req.params;
-        const subPath = req.params.canal + (req.params[0] || '');
+        // Capturamos todo lo que viene después del canal
+        const extraPath = req.params[0] || '';
+        const canalFull = req.params.canal + extraPath;
         
-        // Usamos el dominio que aparece en tu cuenta
-        const IPTV_DOMAIN = 'http://vipketseyket.top:8080';
+        const IPTV_HOST = 'http://192.142.5.76:8080';
         let targetUrl;
 
-        if (subPath.includes('hlsr/')) {
-            // Si es un fragmento, usamos la IP que descubrimos antes si el dominio falla
-            targetUrl = `http://192.142.5.76:8080/${subPath}`;
+        // LÓGICA DE ENRUTAMIENTO CORREGIDA
+        if (canalFull.includes('hlsr/')) {
+            // Si la ruta ya incluye hlsr/, le pedimos directamente al host
+            // Ejemplo: http://192.142.5.76:8080/hlsr/ABC...
+            targetUrl = `${IPTV_HOST}/${canalFull}`;
         } else {
-            targetUrl = `${IPTV_DOMAIN}/live/${user}/${pass}/${subPath}`;
+            // Si es la petición inicial del m3u8
+            targetUrl = `${IPTV_HOST}/live/${user}/${pass}/${canalFull}`;
         }
 
-        console.log('Solicitando canal a:', targetUrl);
+        console.log('Realizando petición a IPTV:', targetUrl);
 
         const response = await axios({
             method: 'get',
             url: targetUrl,
             headers: { 
-                // Engañamos al servidor haciéndole creer que somos un deco MAG250
-                'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG250/2.1.0 Safari/533.3',
-                'Accept': '/',
-                'Host': 'vipketseyket.top:8080',
-                'Connection': 'Keep-Alive'
+                'User-Agent': 'IPTVSmartersPlayer', // Camuflaje de App
+                'Host': 'vipketseyket.top:8080'
             },
-            responseType: (subPath.endsWith('.m3u8')) ? 'text' : 'stream',
+            responseType: (canalFull.endsWith('.m3u8')) ? 'text' : 'stream',
             timeout: 15000
         });
 
-        if (subPath.endsWith('.m3u8')) {
+        if (canalFull.endsWith('.m3u8')) {
             const host = req.get('host');
-            const protocol = req.protocol;
+            const protocol = req.protocol; // Detecta si es http o https
             const baseType = req.path.startsWith('/live') ? 'live' : 'stream';
             
-            // Esta parte es vital: reescribimos para que el siguiente paso también pase por el proxy
-            const proxyBase = `${protocol}://${host}/${baseType}/${user}/${pass}/hlsr/`;
-            const modifiedM3U8 = response.data.replace(/\/hlsr\//g, proxyBase);
+            // Construimos la base del proxy para los segmentos .ts
+            // Resultado: https://sp-smd7.onrender.com/stream/USER/PASS/
+            const proxyBase = `${protocol}://${host}/${baseType}/${user}/${pass}/`;
+            
+            // REESCRITURA: Reemplazamos "/hlsr/" por "URL_PROXY/hlsr/"
+            const modifiedM3U8 = response.data.replace(/\/hlsr\//g, proxyBase + 'hlsr/');
             
             res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
             return res.send(modifiedM3U8);
         }
 
+        // Si es un .ts, lo enviamos como flujo de video
         res.setHeader('Content-Type', 'video/mp2t');
         response.data.pipe(res);
 
     } catch (error) {
-        // Si hay error, mostramos en el log de Render qué respondió el IPTV exactamente
-        if (error.response) {
-            console.error('IPTV respondió con error:', error.response.status);
-            console.error('Cabeceras de respuesta:', error.response.headers);
-        }
+        const status = error.response ? error.response.status : 500;
+        console.error('Error en Proxy:', status, error.message);
         if (!res.headersSent) {
-            const status = error.response ? error.response.status : 500;
-            res.status(status).send('Status: ' + status);
+            res.status(status).send('Error: ' + status);
         }
     }
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log('Proxy Mag250 camuflado listo'));
+app.listen(port, () => console.log('Proxy Final con Reescritura Activo'));
