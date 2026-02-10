@@ -21,9 +21,9 @@ app.get('/stream/:user/:pass/:canal*', async (req, res) => {
     // Construimos la URL de destino
     let targetUrl;
     if (fullPath.startsWith('hlsr/')) {
-        targetUrl = ´${IPTV_HOST}/${fullPath}´;
+        targetUrl = `${IPTV_HOST}/${fullPath}`;
     } else {
-        targetUrl = ´${IPTV_HOST}/live/${user}/${pass}/${fullPath}´;
+        targetUrl = `${IPTV_HOST}/live/${user}/${pass}/${fullPath}`;
     }
 
     try {
@@ -58,3 +58,4 @@ app.get('/stream/:user/:pass/:canal*', async (req, res) => {
 });
 
 app.listen(port, () => console.log('Proxy dinámico corriendo'));
+
