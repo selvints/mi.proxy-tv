@@ -12,7 +12,7 @@ app.use((req, res, next) => {
 app.get('/live/:canalId', async (req, res) => {
     const { canalId } = req.params;
     // URL base sin el archivo final
-    const IPTV_URL = ´http://vipketseyket.top:8080/live/VIP013911761680146102/77b83cecc0c6/${canalId}´;
+    const IPTV_URL = `http://vipketseyket.top:8080/live/VIP013911761680146102/77b83cecc0c6/${canalId}`;
 
     try {
         const response = await axios({
@@ -46,3 +46,4 @@ app.get('/live/:canalId', async (req, res) => {
 });
 
 app.listen(port, () => console.log(Proxy activo en puerto ${port}));
+
