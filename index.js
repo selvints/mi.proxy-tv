@@ -45,5 +45,6 @@ app.get('/live/:canalId', async (req, res) => {
     }
 });
 
-app.listen(port, () => console.log(Proxy activo en puerto ${port}));
+app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
+
 
