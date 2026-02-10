@@ -54,7 +54,8 @@ app.get('/stream/:canalId', async (req, res) => {
     }
 });
 
-app.listen(port, () => console.log(Proxy IPTV en puerto ${port}));
+app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
+
 
 
 
