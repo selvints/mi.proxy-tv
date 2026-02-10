@@ -9,54 +9,63 @@ app.use((req, res, next) => {
     next();
 });
 
-// Usamos una ruta más flexible
-app.get('/stream/:user/:pass/:canal*', async (req, res) => {
+// Esta ruta acepta CUALQUIER COSA que empiece con /live/ o /stream/
+app.get(['/live/:user/:pass/:canal*', '/stream/:user/:pass/:canal*'], async (req, res) => {
     try {
         const { user, pass } = req.params;
-        // Reconstruimos el canal completo (incluyendo sub-rutas si las hay)
         const subPath = req.params.canal + (req.params[0] || '');
         
+        // El servidor real de tu IPTV
         const IPTV_HOST = 'http://192.142.5.76:8080';
         let targetUrl;
 
-        // Si la petición es un fragmento de video relativo que ya capturamos
         if (subPath.includes('hlsr/')) {
             targetUrl = `${IPTV_HOST}/${subPath}`;
         } else {
             targetUrl = `${IPTV_HOST}/live/${user}/${pass}/${subPath}`;
         }
 
-        console.log('Proxying a:', targetUrl);
+        console.log('Redirigiendo a IPTV:', targetUrl);
 
         const response = await axios({
             method: 'get',
             url: targetUrl,
-            headers: { 'User-Agent': 'Mozilla/5.0' },
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': '/',
+                'Connection': 'keep-alive'
+            },
+            // Si es m3u8 pedimos texto para editarlo, si no, flujo binario
             responseType: (subPath.endsWith('.m3u8')) ? 'text' : 'stream',
-            timeout: 10000
+            timeout: 15000
         });
 
         if (subPath.endsWith('.m3u8')) {
-            // Reemplazamos las rutas para que pasen de nuevo por Render
             const host = req.get('host');
             const protocol = req.protocol;
-            const proxyBase = `${protocol}://${host}/stream/${user}/${pass}/hlsr/`;
+            // Detectamos si la petición original entró por /live o /stream para mantener la coherencia
+            const baseType = req.path.startsWith('/live') ? 'live' : 'stream';
+            const proxyBase = `${protocol}://${host}/${baseType}/${user}/${pass}/hlsr/`;
             
+            // Corregimos las rutas relativas del m3u8
             const modifiedM3U8 = response.data.replace(/\/hlsr\//g, proxyBase);
             res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
             return res.send(modifiedM3U8);
         }
 
+        // Para los fragmentos .ts
         res.setHeader('Content-Type', 'video/mp2t');
         response.data.pipe(res);
 
     } catch (error) {
-        console.error('Error detallado:', error.message);
+        console.error('Error en Proxy:', error.message);
         if (!res.headersSent) {
-            res.status(500).send('Error en el Proxy: ' + error.message);
+            // Si el error es 401, lo enviamos tal cual para saber que las claves fallan
+            const status = error.response ? error.response.status : 500;
+            res.status(status).send('IPTV Error: ' + status);
         }
     }
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log('Proxy Online'));
+app.listen(port, () => console.log('Servidor Proxy Multiruta Listo'));
