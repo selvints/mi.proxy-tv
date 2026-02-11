@@ -1,51 +1,45 @@
 const express = require('express');
-const http = require('http');
+const http = require('http'); // Para el destino http://
+const https = require('https'); // Para tu servidor https://
 const cors = require('cors');
-const app = express();
+const { http: httpFollow, https: httpsFollow } = require('follow-redirects');
 
+const app = express();
 app.use(cors());
 
 app.get('/proxy', (req, res) => {
-    // Usamos req.query.url para capturar la URL completa de DiabloTV
     const targetUrl = req.query.url;
-    
-    if (!targetUrl) return res.status(400).send('URL faltante');
+    if (!targetUrl) return res.status(400).send('URL requerida');
 
-    console.log("Conectando a stream...");
+    console.log("Siguiendo redirección de:", targetUrl);
 
-    const options = {
-        method: 'GET',
+    // Configuramos la petición para seguir redirecciones automáticamente
+    const client = targetUrl.startsWith('https') ? httpsFollow : httpFollow;
+
+    const proxyReq = client.get(targetUrl, {
         headers: {
-            // Engañamos al servidor para que piense que somos un decodificador IPTV
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) VLC/3.0.18',
-            'Accept': '*/*',
-            'Connection': 'keep-alive',
+            'User-Agent': 'VLC/3.0.18',
+            'Connection': 'keep-alive'
         }
-    };
+    }, (proxyRes) => {
+        // Forzamos headers de streaming y seguridad
+        res.writeHead(proxyRes.statusCode, {
+            'Access-Control-Allow-Origin': '*',
+            'Content-Type': 'video/mp2t',
+            'Connection': 'keep-alive',
+            'Transfer-Encoding': 'chunked'
+        });
 
-    const proxyRequest = http.get(targetUrl, options, (proxyResponse) => {
-        // Copiamos los headers de DiabloTV pero inyectamos CORS
-        const headers = { ...proxyResponse.headers };
-        headers['Access-Control-Allow-Origin'] = '*';
-        headers['Cache-Control'] = 'no-cache';
-        headers['Connection'] = 'keep-alive';
-
-        res.writeHead(proxyResponse.statusCode, headers);
-
-        // Canalizamos los datos sin procesarlos (Streaming puro)
-        proxyResponse.pipe(res);
+        // Canalizamos el video directamente
+        proxyRes.pipe(res);
     });
 
-    proxyRequest.on('error', (e) => {
-        console.error("Error en Proxy:", e.message);
-        res.status(500).end();
+    proxyReq.on('error', (err) => {
+        console.error("Error:", err.message);
+        res.status(500).send(err.message);
     });
 
-    // Si el usuario cierra el reproductor, cerramos la conexión al servidor de TV
-    req.on('close', () => {
-        proxyRequest.destroy();
-    });
+    req.on('close', () => proxyReq.destroy());
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor en puerto ${PORT}`));
+app.listen(process.env.PORT || 3000);
