@@ -1,45 +1,58 @@
 const express = require('express');
-const http = require('http'); // Para el destino http://
-const https = require('https'); // Para tu servidor https://
-const cors = require('cors');
 const { http: httpFollow, https: httpsFollow } = require('follow-redirects');
-
+const cors = require('cors');
 const app = express();
+
 app.use(cors());
 
 app.get('/proxy', (req, res) => {
     const targetUrl = req.query.url;
-    if (!targetUrl) return res.status(400).send('URL requerida');
+    if (!targetUrl) return res.status(400).send('URL faltante');
 
-    console.log("Siguiendo redirección de:", targetUrl);
+    // 1. ELIMINAR TIMEOUTS: Evita que Render corte a los 60-90 segundos
+    req.setTimeout(0);
+    res.setTimeout(0);
 
-    // Configuramos la petición para seguir redirecciones automáticamente
     const client = targetUrl.startsWith('https') ? httpsFollow : httpFollow;
 
     const proxyReq = client.get(targetUrl, {
         headers: {
-            'User-Agent': 'VLC/3.0.18',
+            'User-Agent': 'VLC/3.0.18', // Identidad de reproductor de video profesional
+            'Accept': '*/*',
             'Connection': 'keep-alive'
         }
     }, (proxyRes) => {
-        // Forzamos headers de streaming y seguridad
+        // 2. HEADERS DE FLUJO CONTINUO
         res.writeHead(proxyRes.statusCode, {
             'Access-Control-Allow-Origin': '*',
             'Content-Type': 'video/mp2t',
             'Connection': 'keep-alive',
-            'Transfer-Encoding': 'chunked'
+            'Transfer-Encoding': 'chunked',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
         });
 
-        // Canalizamos el video directamente
-        proxyRes.pipe(res);
+        // 3. PASO DE DATOS SIN BUFFER: Esto evita que el proxy se sature y corte
+        proxyRes.on('data', (chunk) => {
+            res.write(chunk);
+        });
+
+        proxyRes.on('end', () => {
+            res.end();
+        });
     });
 
     proxyReq.on('error', (err) => {
-        console.error("Error:", err.message);
-        res.status(500).send(err.message);
+        console.error("Error en el stream:", err.message);
+        res.status(500).end();
     });
 
-    req.on('close', () => proxyReq.destroy());
+    // Si el usuario cierra la pestaña, cerramos la conexión para no gastar recursos
+    req.on('close', () => {
+        proxyReq.destroy();
+    });
 });
 
-app.listen(process.env.PORT || 3000);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Streaming infinito en puerto ${PORT}`));
