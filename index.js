@@ -7,9 +7,9 @@ app.use(cors());
 
 app.get('/proxy', (req, res) => {
     const targetUrl = req.query.url;
-    if (!targetUrl) return res.status(400).send('URL faltante');
+    if (!targetUrl) return res.status(400).send('Falta URL');
 
-    // 1. ELIMINAR TIMEOUTS: Evita que Render corte a los 60-90 segundos
+    // Desactivar límites de tiempo
     req.setTimeout(0);
     res.setTimeout(0);
 
@@ -17,42 +17,34 @@ app.get('/proxy', (req, res) => {
 
     const proxyReq = client.get(targetUrl, {
         headers: {
-            'User-Agent': 'VLC/3.0.18', // Identidad de reproductor de video profesional
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) VLC/3.0.18',
             'Accept': '*/*',
+            'Range': 'bytes=0-', // Le dice al servidor que queremos todo el flujo
+            'Icy-MetaData': '1',
             'Connection': 'keep-alive'
         }
     }, (proxyRes) => {
-        // 2. HEADERS DE FLUJO CONTINUO
+        // Configuramos la respuesta para el navegador
         res.writeHead(proxyRes.statusCode, {
             'Access-Control-Allow-Origin': '*',
             'Content-Type': 'video/mp2t',
-            'Connection': 'keep-alive',
             'Transfer-Encoding': 'chunked',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
+            'Connection': 'keep-alive',
+            'Cache-Control': 'no-cache'
         });
 
-        // 3. PASO DE DATOS SIN BUFFER: Esto evita que el proxy se sature y corte
-        proxyRes.on('data', (chunk) => {
-            res.write(chunk);
-        });
-
-        proxyRes.on('end', () => {
-            res.end();
-        });
+        // Forzamos el flujo constante
+        proxyRes.pipe(res);
     });
 
-    proxyReq.on('error', (err) => {
-        console.error("Error en el stream:", err.message);
-        res.status(500).end();
+    proxyReq.on('error', (e) => {
+        console.error("Error:", e.message);
+        res.end();
     });
 
-    // Si el usuario cierra la pestaña, cerramos la conexión para no gastar recursos
     req.on('close', () => {
         proxyReq.destroy();
     });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Streaming infinito en puerto ${PORT}`));
+app.listen(process.env.PORT || 3000);
