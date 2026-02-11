@@ -1,13 +1,13 @@
 const express = require('express');
 const axios = require('axios');
+const cors = require('cors');
 const app = express();
-const port = process.env.PORT || 3000;
 
-app.get('/stream/:canalId', async (req, res) => {
-    const { canalId } = req.params;
-    // Base de tu IPTV con tus credenciales
-    const IPTV_BASE = 'http://tv.diablotv.net:8080/lprado021/DHVmZKaqge';
-    const targetUrl = `${IPTV_BASE}/${canalId}`;
+app.use(cors());
+
+app.get('/proxy', async (req, res) => {
+    const targetUrl = req.query.url;
+    if (!targetUrl) return res.status(400).send('No URL provided');
 
     try {
         const response = await axios({
@@ -15,49 +15,24 @@ app.get('/stream/:canalId', async (req, res) => {
             url: targetUrl,
             responseType: 'stream',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': '/',
+                'User-Agent': 'Mozilla/5.0 (QtEmbedded; Linux; arm) AppleWebKit/538.1 (KHTML, like Gecko) Mag244/3.0.0 Safari/538.1',
+                'Referer': 'http://tv.diablotv.net:8080/',
+                'Accept': '*/*',
                 'Connection': 'keep-alive'
             },
-            // IMPORTANTE: Sin timeout para streams en vivo
-            timeout: 0 
+            timeout: 10000
         });
 
-        // CABECERAS PARA STREAMING VIVO
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Content-Type', 'video/mp2t');
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-        res.setHeader('Connection', 'keep-alive');
-        // Esto le dice al navegador que no sabe qué tan grande es el archivo (porque es infinito)
-        res.setHeader('Transfer-Encoding', 'chunked'); 
-
-        // Pipe con manejo de errores
+        // Copiamos los headers del stream original al navegador
+        res.set(response.headers);
+        res.set('Access-Control-Allow-Origin', '*');
+        
         response.data.pipe(res);
-
-        response.data.on('error', (err) => {
-            console.error('Error en el stream de origen:', err.message);
-            res.end();
-        });
-
-        req.on('close', () => {
-            console.log('Cliente desconectado, cerrando stream.');
-            response.data.destroy();
-        });
-
     } catch (error) {
-        console.error('Error de conexión:', error.message);
-        if (!res.headersSent) {
-            res.status(500).setHeader('Access-Control-Allow-Origin', '*').send('Error en el stream');
-        }
+        console.error('Error en el proxy:', error.message);
+        res.status(error.response ? error.response.status : 500).send(error.message);
     }
 });
 
-app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
-
-
-
-
-
-
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Proxy activo en puerto ${PORT}`));
