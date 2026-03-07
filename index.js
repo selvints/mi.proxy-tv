@@ -12,7 +12,8 @@ app.get('/proxy', async (req, res) => {
     // Headers para engañar al servidor y evitar el Mixed Content
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'video/mp2t');
-
+    res.setHeader('Connection', 'keep-alive';
+    res.setHeader('Transfer-Encoding', 'chunked');
     try {
         const streamResponse = await axios({
             method: 'get',
@@ -44,3 +45,7 @@ app.get('/proxy', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));
+server.keepAliveTimeout = 0;
+server.headersTimeout = 0;
+server.resquestTimeout = 0;
+
