@@ -1,46 +1,33 @@
-const express = require('express');
-const axios = require('axios');
-const cors = require('cors');
-const app = express();
+const https = require('https');
+const http = require('http');
 
-app.use(cors());
-
-app.get('/proxy', async (req, res) => {
+app.get('/proxy', (req, res) => {
     const targetUrl = req.query.url;
     if (!targetUrl) return res.status(400).send('URL faltante');
 
-    // Headers para engañar al servidor y evitar el Mixed Content
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    const client = targetUrl.startsWith('https') ? https : http;
+
+    // Configuración de cabeceras para flujo continuo
     res.setHeader('Content-Type', 'video/mp2t');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Connection', 'keep-alive');
 
-    try {
-        const streamResponse = await axios({
-            method: 'get',
-            url: targetUrl,
-            responseType: 'stream',
-            timeout: 0, 
-            headers: {
-                'User-Agent': 'VLC/3.0.18', // Se identifica como reproductor, no como web
-                'Connection': 'keep-alive',
-                'Accept': '*/*'
-            }
-        });
+    const request = client.get(targetUrl, {
+        headers: { 'User-Agent': 'VLC/3.0.18' }
+    }, (stream) => {
+        // Pasamos el flujo directamente al navegador
+        stream.pipe(res);
+    });
 
-        // Pasamos los datos bit a bit (Streaming puro)
-        streamResponse.data.pipe(res);
+    request.on('error', (e) => {
+        console.error(e);
+        if (!res.headersSent) res.status(500).end();
+    });
 
-        // Si cierras la pestaña, el proxy corta la conexión al servidor de TV
-        req.on('close', () => {
-            streamResponse.data.destroy();
-        });
-
-    } catch (error) {
-        console.error("Error en el stream:", error.message);
-        if (!res.headersSent) {
-            res.status(500).send("Error de conexión con DiabloTV");
-        }
-    }
+    req.on('close', () => {
+        request.destroy();
+    });
 });
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));
