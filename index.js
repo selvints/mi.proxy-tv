@@ -9,11 +9,12 @@ app.get('/proxy', async (req, res) => {
     const targetUrl = req.query.url;
     if (!targetUrl) return res.status(400).send('URL faltante');
 
-    // Headers para engañar al servidor y evitar el Mixed Content
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'video/mp2t');
+    // Forzamos a que la conexión se mantenga abierta en el navegador
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Transfer-Encoding', 'chunked');
+
     try {
         const streamResponse = await axios({
             method: 'get',
@@ -21,16 +22,13 @@ app.get('/proxy', async (req, res) => {
             responseType: 'stream',
             timeout: 0, 
             headers: {
-                'User-Agent': 'VLC/3.0.18', // Se identifica como reproductor, no como web
-                'Connection': 'keep-alive',
-                'Accept': '*/*'
+                'User-Agent': 'VLC/3.0.18',
+                'Connection': 'keep-alive'
             }
         });
 
-        // Pasamos los datos bit a bit (Streaming puro)
         streamResponse.data.pipe(res);
 
-        // Si cierras la pestaña, el proxy corta la conexión al servidor de TV
         req.on('close', () => {
             streamResponse.data.destroy();
         });
@@ -38,15 +36,19 @@ app.get('/proxy', async (req, res) => {
     } catch (error) {
         console.error("Error en el stream:", error.message);
         if (!res.headersSent) {
-            res.status(500).send("Error de conexión con DiabloTV");
+            res.status(500).send("Error de conexión");
         }
     }
 });
 
+// --- ESTA ES LA PARTE QUE DEBES CAMBIAR ---
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));
-server.keepAliveTimeout = 0;
+
+const server = app.listen(PORT, () => {
+    console.log(`Servidor de streaming activo en puerto ${PORT}`);
+});
+
+// Configuraciones críticas para evitar el cierre a los 30s / 3min
+server.keepAliveTimeout = 0; 
 server.headersTimeout = 0;
-server.resquestTimeout = 0;
-
-
+server.requestTimeout = 0; // Añadimos esta para mayor seguridad en streams largos
