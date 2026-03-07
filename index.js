@@ -59,10 +59,11 @@ app.get('/proxy', async (req, res) => {
 // 6. Inicio del servidor y configuraciones de red
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
-    console.log(Servidor activo en Zacapa/Render puerto ${PORT});
+    console.log(`Servidor de streaming activo en puerto ${PORT}`);
 });
 
 // Evitar cierres prematuros por inactividad
 server.keepAliveTimeout = 0;
 server.headersTimeout = 0;
 server.requestTimeout = 0;
+
