@@ -49,7 +49,6 @@ const server = app.listen(PORT, () => {
 });
 
 // Configuraciones críticas para evitar el cierre a los 30s / 3min
-//server.keepAliveTimeout = 0; 
-//server.headersTimeout = 0;
-//server.requestTimeout = 0; // Añadimos esta para mayor seguridad en streams largos
-
+server.keepAliveTimeout = 0; 
+server.headersTimeout = 0;
+server.requestTimeout = 0; // Añadimos esta para mayor seguridad en streams largos
