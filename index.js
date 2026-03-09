@@ -1,68 +1,62 @@
-// 1. Importación de librerías
 const express = require('express');
 const axios = require('axios');
-const cors = require('cors');
-
-// 2. Inicialización de la aplicación (ESTO ES LO QUE FALTABA)
 const app = express();
+const port = process.env.PORT || 3000;
 
-// 3. Configuración de Middlewares
-app.use(cors());
-
-// 4. Lista de User-Agents para evitar bloqueos
-const userAgents = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
-    'vlc/3.0.18 LibVLC/3.0.18',
-    'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1 Safari/538.1'
-];
-
-// 5. Definición de la ruta del Proxy
-app.get('/proxy', async (req, res) => {
-    const targetUrl = req.query.url;
-    if (!targetUrl) return res.status(400).send('URL faltante');
-
-    const randomAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
-
-    // Cabeceras para flujo FLV continuo
-    res.setHeader('Content-Type', 'video/x-flv');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Transfer-Encoding', 'chunked');
+app.get('/stream/:canalId', async (req, res) => {
+    const { canalId } = req.params;
+    // Base de tu IPTV con tus credenciales
+    const IPTV_BASE = 'http://vipketseyket.top:8080';
+    const targetUrl = `${IPTV_BASE}/${canalId}`;
 
     try {
-        const streamResponse = await axios({
+        const response = await axios({
             method: 'get',
             url: targetUrl,
             responseType: 'stream',
-            timeout: 0, 
             headers: {
-                'User-Agent': randomAgent,
-                'Connection': 'keep-alive',
-                'Accept': '/'
-            }
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': '/',
+                'Connection': 'keep-alive'
+            },
+            // IMPORTANTE: Sin timeout para streams en vivo
+            timeout: 0 
         });
 
-        streamResponse.data.pipe(res);
+        // CABECERAS PARA STREAMING VIVO
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Content-Type', 'video/mp2t');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Connection', 'keep-alive');
+        // Esto le dice al navegador que no sabe qué tan grande es el archivo (porque es infinito)
+        res.setHeader('Transfer-Encoding', 'chunked'); 
+
+        // Pipe con manejo de errores
+        response.data.pipe(res);
+
+        response.data.on('error', (err) => {
+            console.error('Error en el stream de origen:', err.message);
+            res.end();
+        });
 
         req.on('close', () => {
-            streamResponse.data.destroy();
+            console.log('Cliente desconectado, cerrando stream.');
+            response.data.destroy();
         });
 
     } catch (error) {
-        console.error("Error en el stream:", error.message);
+        console.error('Error de conexión:', error.message);
         if (!res.headersSent) {
-            res.status(500).end();
+            res.status(500).setHeader('Access-Control-Allow-Origin', '*').send('Error en el stream');
         }
     }
 });
 
-// 6. Inicio del servidor y configuraciones de red
-const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, () => {
-    console.log(`Servidor de streaming activo en puerto ${PORT}`);
-});
+app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
 
-// Evitar cierres prematuros por inactividad
-server.keepAliveTimeout = 0;
-server.headersTimeout = 0;
-server.requestTimeout = 0;
+
+
+
+
