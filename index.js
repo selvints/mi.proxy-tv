@@ -12,8 +12,8 @@ app.get('/proxy', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'video/mp2t');
     // Forzamos a que la conexión se mantenga abierta en el navegador
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Transfer-Encoding', 'chunked');
+    // res.setHeader('Connection', 'keep-alive');
+    // res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
         const streamResponse = await axios({
@@ -52,6 +52,7 @@ const server = app.listen(PORT, () => {
 // server.keepAliveTimeout = 0; 
 // server.headersTimeout = 0;
 // server.requestTimeout = 0; // Añadimos esta para mayor seguridad en streams largos
+
 
 
 
