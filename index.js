@@ -4,43 +4,45 @@ const cors = require('cors');
 const app = express();
 
 app.use(cors());
-
 app.get('/proxy', async (req, res) => {
     const targetUrl = req.query.url;
     if (!targetUrl) return res.status(400).send('URL faltante');
-
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', 'video/mp2t');
-    // Forzamos a que la conexión se mantenga abierta en el navegador
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
         const streamResponse = await axios({
             method: 'get',
             url: targetUrl,
             responseType: 'stream',
-            timeout: 0, 
+            timeout: 20000, // 20 segundos para conectar
             headers: {
-                'User-Agent': 'VLC/3.0.18',
+                // Engañamos al servidor para que crea que somos un deco o VLC
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 
+                'Accept': '*/*',
                 'Connection': 'keep-alive'
             }
         });
 
+        // IMPORTANTE: MPEG-TS usa este tipo de contenido
+        res.setHeader('Content-Type', 'video/mp2t');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        
+        // Pipe directo de los datos
         streamResponse.data.pipe(res);
 
+        // Si el cliente (navegador) cierra la pestaña, matamos la conexión al origen
         req.on('close', () => {
             streamResponse.data.destroy();
         });
 
     } catch (error) {
         console.error("Error en el stream:", error.message);
+        // Si el origen da 404, tu proxy también responderá 404
+        const statusCode = error.response ? error.response.status : 500;
         if (!res.headersSent) {
-            res.status(500).send("Error de conexión");
+            res.status(statusCode).send("Error de origen: " + statusCode);
         }
     }
 });
-
 // --- ESTA ES LA PARTE QUE DEBES CAMBIAR ---
 const PORT = process.env.PORT || 3000;
 
