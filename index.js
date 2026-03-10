@@ -1,64 +1,54 @@
 const express = require('express');
 const axios = require('axios');
+const cors = require('cors');
 const app = express();
-const port = process.env.PORT || 3000;
 
-app.get('/stream/:canalId', async (req, res) => {
-    const { canalId } = req.params;
-    // Base de tu IPTV con tus credenciales
-    const IPTV_BASE = 'http://vipketseyket.top:8080/VIP016181729343490112/3ce81b374ed0';
-    const targetUrl = `${IPTV_BASE}/${canalId}`;
+app.use(cors());
+
+app.get('/proxy', async (req, res) => {
+    const targetUrl = req.query.url;
+    if (!targetUrl) return res.status(400).send('URL faltante');
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'video/mp2t');
+    // Forzamos a que la conexión se mantenga abierta en el navegador
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
-        const response = await axios({
+        const streamResponse = await axios({
             method: 'get',
             url: targetUrl,
             responseType: 'stream',
+            timeout: 0, 
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': '/',
+                'User-Agent': 'VLC/3.0.18',
                 'Connection': 'keep-alive'
-            },
-            // IMPORTANTE: Sin timeout para streams en vivo
-            timeout: 0 
+            }
         });
 
-        // CABECERAS PARA STREAMING VIVO
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Content-Type', 'video/mp2t');
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-        res.setHeader('Connection', 'keep-alive');
-        // Esto le dice al navegador que no sabe qué tan grande es el archivo (porque es infinito)
-        res.setHeader('Transfer-Encoding', 'chunked'); 
-
-        // Pipe con manejo de errores
-        response.data.pipe(res);
-
-        response.data.on('error', (err) => {
-            console.error('Error en el stream de origen:', err.message);
-            res.end();
-        });
+        streamResponse.data.pipe(res);
 
         req.on('close', () => {
-            console.log('Cliente desconectado, cerrando stream.');
-            response.data.destroy();
+            streamResponse.data.destroy();
         });
 
     } catch (error) {
-        console.error('Error de conexión:', error.message);
+        console.error("Error en el stream:", error.message);
         if (!res.headersSent) {
-            res.status(500).setHeader('Access-Control-Allow-Origin', '*').send('Error en el stream');
+            res.status(500).send("Error de conexión");
         }
     }
 });
 
-app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
+// --- ESTA ES LA PARTE QUE DEBES CAMBIAR ---
+const PORT = process.env.PORT || 3000;
 
+const server = app.listen(PORT, () => {
+    console.log(`Servidor de streaming activo en puerto ${PORT}`);
+});
 
-
-
-
-
-
+// Configuraciones críticas para evitar el cierre a los 30s / 3min
+// server.keepAliveTimeout = 0; 
+// server.headersTimeout = 0;
+// server.requestTimeout = 0; // Añadimos esta para mayor seguridad en streams largos
