@@ -6,7 +6,7 @@ const port = process.env.PORT || 3000;
 app.get('/stream/:canalId', async (req, res) => {
     const { canalId } = req.params;
     // Base de tu IPTV con tus credenciales
-    const IPTV_BASE = 'http://vipketseyket.top:8080/live/VIP016181729343490112/3ce81b374ed0';
+    const IPTV_BASE = 'http://vipketseyket.top:8080/VIP016181729343490112/3ce81b374ed0';
     const targetUrl = `${IPTV_BASE}/${canalId}`;
 
     try {
@@ -55,6 +55,7 @@ app.get('/stream/:canalId', async (req, res) => {
 });
 
 app.listen(port, () => console.log(`Proxy corriendo en puerto ${port}`));
+
 
 
 
